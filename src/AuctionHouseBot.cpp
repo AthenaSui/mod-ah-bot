@@ -96,13 +96,13 @@ void AuctionHouseBot::AddNewAuctions(Player* AHBplayer, AHBConfig* config)
 
     if (auctions >= minItems + urand(0, maxItems - minItems))
     {
-        LOG_ERROR("module.ahbot", "AHSeller: Auctions above minimum");
+        LOG_DEBUG("module.ahbot", "AHSeller: Auctions above minimum");
         return;
     }
 
     if (auctions >= maxItems)
     {
-        LOG_ERROR("module.ahbot", "AHSeller: Auctions at or above maximum");
+        LOG_DEBUG("module.ahbot", "AHSeller: Auctions at or above maximum");
         return;
     }
 
@@ -248,7 +248,8 @@ void AuctionHouseBot::AddNewAuctions(Player* AHBplayer, AHBConfig* config)
                     {
                         if (BuyMethod) {
                             buyoutPrice /= 500;
-                        } else if (buyoutPrice == 0) {
+                        }
+                        if (buyoutPrice == 0) {
                             buyoutPrice = 1 * urand(config->GetMinPrice(prototype->Quality),
                                                     config->GetMaxPrice(prototype->Quality)) / 100;
                         }
@@ -307,7 +308,7 @@ void AuctionHouseBot::AddNewAuctions(Player* AHBplayer, AHBConfig* config)
             }
 
             if (buyoutPrice == 0)
-                buyoutPrice = 1;
+                buyoutPrice = urand(10 * 1000, 15 * 1000) * urand(config->GetMinPrice(prototype->Quality), config->GetMaxPrice(prototype->Quality)) / 100;
 
             bidPrice = buyoutPrice * urand(config->GetMinBidPrice(prototype->Quality), config->GetMaxBidPrice(prototype->Quality));
             bidPrice /= 100;
@@ -380,7 +381,7 @@ void AuctionHouseBot::AddNewAuctionBuyerBotBid(std::shared_ptr<Player> player, s
         WithCallback(std::bind(&AuctionHouseBot::AddNewAuctionBuyerBotBidCallback, this, player, session, sharedConfig, std::placeholders::_1)));
 }
 
-void AuctionHouseBot::AddNewAuctionBuyerBotBidCallback(std::shared_ptr<Player> player, std::shared_ptr<WorldSession> session, std::shared_ptr<AHBConfig> config, QueryResult result)
+void AuctionHouseBot::AddNewAuctionBuyerBotBidCallback(std::shared_ptr<Player> player, std::shared_ptr<WorldSession> /*session*/, std::shared_ptr<AHBConfig> config, QueryResult result)
 {
     if (!result || !result->GetRowCount())
         return;
