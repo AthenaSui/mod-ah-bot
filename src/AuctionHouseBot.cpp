@@ -132,7 +132,7 @@ void AuctionHouseBot::addNewAuctions(Player *AHBplayer, AHBConfig *config)
     uint32 minItems = config->GetMinItems();
     uint32 maxItems = config->GetMaxItems();
 
-    if (maxItems == 0)
+    if (maxItems == 0 || maxItems < minItems)
     {
         //if (debug_Out) sLog->outString( "AHSeller: Auctions disabled");
         return;
@@ -153,7 +153,7 @@ void AuctionHouseBot::addNewAuctions(Player *AHBplayer, AHBConfig *config)
 
     uint32 items = 0;
 
-    if (auctions >= minItems)
+    if (auctions >= minItems + urand(0, maxItems - minItems))
     {
         if (debug_Out)
             LOG_ERROR("module", "AHSeller: Auctions above minimum");
@@ -370,23 +370,33 @@ void AuctionHouseBot::addNewAuctions(Player *AHBplayer, AHBConfig *config)
             uint64 bidPrice = 0;
             uint32 stackCount = 1;
 
-            if (SellMethod)
-                buyoutPrice = prototype->BuyPrice;
-            else
-                buyoutPrice = prototype->SellPrice;
+            if (BuyMethod){
+                if (prototype->BuyPrice > 0) {
+                    buyoutPrice = prototype->BuyPrice;
+                } else if (prototype->SellPrice > 0) {
+                    buyoutPrice = prototype->SellPrice * 4;
+                }
+            }
+            else{
+                if (prototype->SellPrice > 0) {
+                    buyoutPrice = prototype->SellPrice;
+                } else if (prototype->BuyPrice > 0) {
+                    buyoutPrice = prototype->BuyPrice / 4;
+                }
+            }
+
+            if (prototype->BuyCount > 1) {
+                stackCount = prototype->BuyCount;
+            }
 
             if (prototype->Quality <= AHB_MAX_QUALITY)
             {
-                if (config->GetMaxStack(prototype->Quality) > 1 && item->GetMaxStackCount() > 1)
-                    stackCount = urand(1, minValue(item->GetMaxStackCount(), config->GetMaxStack(prototype->Quality)));
-                else if (config->GetMaxStack(prototype->Quality) == 0 && item->GetMaxStackCount() > 1)
-                    stackCount = urand(1, item->GetMaxStackCount());
-                else
-                    stackCount = 1;
+                if (config->GetMaxStack(prototype->Quality) > 1 &&
+                    stackCount > config->GetMaxStack(prototype->Quality)) {
+                    stackCount = config->GetMaxStack(prototype->Quality);
+                }
                 buyoutPrice *= urand(config->GetMinPrice(prototype->Quality), config->GetMaxPrice(prototype->Quality));
                 buyoutPrice /= 100;
-                bidPrice = buyoutPrice * urand(config->GetMinBidPrice(prototype->Quality), config->GetMaxBidPrice(prototype->Quality));
-                bidPrice /= 100;
             }
             else
             {
@@ -396,6 +406,111 @@ void AuctionHouseBot::addNewAuctions(Player *AHBplayer, AHBConfig *config)
                 item->RemoveFromUpdateQueueOf(AHBplayer);
                 continue;
             }
+
+            uint32 stack_rate = 50;
+            switch (prototype->Class) {
+                case ITEM_CLASS_CONSUMABLE:
+                    {
+                        if (buyoutPrice == 0)
+                            buyoutPrice = urand(10 * 10000, 15 * 10000) * urand(config->GetMinPrice(prototype->Quality),
+                                                                                config->GetMaxPrice(prototype->Quality)) / 100;
+                        if (prototype->SubClass != ITEM_SUBCLASS_ITEM_ENHANCEMENT && urand(0, 100) < stack_rate)
+                            stackCount = prototype->Stackable;
+                    }
+                    break;
+                case ITEM_CLASS_CONTAINER:
+                    {
+                        if (buyoutPrice > 3000 * 10000) {
+                            buyoutPrice = urand(2900 * 10000, 3200 * 10000);
+                        }
+                    }
+                    break;
+                case ITEM_CLASS_GEM:
+                    {
+                        if (buyoutPrice == 0) {
+                            buyoutPrice = urand(10 * 10000, 15 * 10000) * urand(config->GetMinPrice(prototype->Quality),
+                                                                                config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                        if (prototype->SubClass != ITEM_SUBCLASS_GEM_META) {
+                            buyoutPrice /= 30;
+                        }
+                    }
+                    break;
+                case ITEM_CLASS_WEAPON:
+                case ITEM_CLASS_ARMOR:
+                    {
+                        if (buyoutPrice == 0)
+                            buyoutPrice = urand(20 * 10000, 25 * 10000) * urand(config->GetMinPrice(prototype->Quality),
+                                                                                config->GetMaxPrice(prototype->Quality)) / 100;
+                    }
+                break;
+                case ITEM_CLASS_PROJECTILE:
+                    {
+                        if (BuyMethod) {
+                            buyoutPrice /= 500;
+                        } else if (buyoutPrice == 0) {
+                            buyoutPrice = 1 * urand(config->GetMinPrice(prototype->Quality),
+                                                    config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                    }
+                    break;
+                case ITEM_CLASS_TRADE_GOODS:
+                    {
+                        if (prototype->SubClass == 12 || buyoutPrice > 1000 * 10000) {
+                            buyoutPrice /= 10;
+                        }
+                        if (buyoutPrice == 0) {
+                            buyoutPrice = urand(10 * 10000, 15 * 10000) * urand(config->GetMinPrice(prototype->Quality),
+                                                                                config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                        if (urand(0, 100) < stack_rate)
+                            stackCount = prototype->Stackable;
+                    }
+                    break;
+                case ITEM_CLASS_RECIPE:
+                    {
+                        if (buyoutPrice > 1000 * 10000) {
+                            buyoutPrice /= 10;
+                        }
+                        if (buyoutPrice == 0) {
+                            buyoutPrice = urand(10 * 1000, 15 * 1000) * urand(config->GetMinPrice(prototype->Quality),
+                                                                              config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                    }
+                    break;
+                case ITEM_CLASS_QUEST:
+                    {
+                        if (buyoutPrice == 0) {
+                            buyoutPrice = urand(10 * 1000, 15 * 1000) * urand(config->GetMinPrice(prototype->Quality),
+                                                                              config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                    }
+                    break;
+                case ITEM_CLASS_MISC:
+                    {
+                        if (prototype->SubClass == 2 && buyoutPrice < 10 * 10000) {
+                            if (buyoutPrice == 0) {
+                                buyoutPrice = urand(1 * 10000, 2 * 10000);
+                            }
+                            buyoutPrice *= 100;
+                        } else if (prototype->SubClass == 5) {
+                            buyoutPrice = urand(450 * 10000, 500 * 10000) * urand(config->GetMinPrice(prototype->Quality), config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                        if (buyoutPrice == 0) {
+                            buyoutPrice = urand(10 * 1000, 20 * 1000) * urand(config->GetMinPrice(prototype->Quality), config->GetMaxPrice(prototype->Quality)) / 100;
+                        }
+                    }
+                    break;
+                case ITEM_CLASS_GLYPH:
+                    buyoutPrice *= 150;
+                    break;
+            }
+
+            if (buyoutPrice == 0)
+                buyoutPrice = 1;
+
+            bidPrice = buyoutPrice * urand(config->GetMinBidPrice(prototype->Quality), config->GetMaxBidPrice(prototype->Quality));
+            bidPrice /= 100;
 
             uint32 etime = urand(1,3);
             switch(etime)
@@ -562,44 +677,48 @@ void AuctionHouseBot::addNewAuctionBuyerBotBid(Player *AHBplayer, AHBConfig *con
         double bidrate = static_cast<double>(urand(1, 100)) / 100;
         long double bidMax = 0;
 
+        // default value if no buyprice nor sellprice
+        auto item_price = 1* 10000;
+
         // check that bid has acceptable value and take bid based on vendorprice, stacksize and quality
-        if (BuyMethod)
+        if (BuyMethod){
+            if (prototype->BuyPrice > 0)
+                item_price = prototype->BuyPrice;
+            else if (prototype->SellPrice > 0)
+                item_price = prototype->SellPrice * 4;
+        }
+        else{
+            if (prototype->SellPrice > 0)
+                item_price = prototype->SellPrice;
+            else if (prototype->BuyPrice > 0)
+                item_price = prototype->BuyPrice / 4;
+        }
+        if (prototype->Quality <= AHB_MAX_QUALITY)
         {
-            if (prototype->Quality <= AHB_MAX_QUALITY)
-            {
-                if (currentprice < prototype->SellPrice * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality))
-                    bidMax = prototype->SellPrice * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality);
-            }
-            else
-            {
-                // quality is something it shouldn't be, let's get out of here
-                if (debug_Out)
-                    LOG_ERROR("module", "AHBuyer: Quality {} not Supported", prototype->Quality);
-                    continue;
-            }
+            if (currentprice < item_price * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality))
+                bidMax = item_price * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality);
         }
         else
         {
-            if (prototype->Quality <= AHB_MAX_QUALITY)
-            {
-                if (currentprice < prototype->BuyPrice * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality))
-                    bidMax = prototype->BuyPrice * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality);
-            }
-            else
-            {
-                // quality is something it shouldn't be, let's get out of here
-                if (debug_Out)
-                    LOG_ERROR("module", "AHBuyer: Quality {} not Supported", prototype->Quality);
-                    continue;
-            }
-        }        
+            // quality is something it shouldn't be, let's get out of here
+            if (debug_Out)
+                LOG_ERROR("module", "AHBuyer: Quality {} not Supported", prototype->Quality);
+                continue;
+        }
 
         // check some special items, and do recalculating to their prices
         switch (prototype->Class)
         {
             // ammo
         case 6:
-            bidMax = 0;
+            {
+                if (BuyMethod)
+                    bidMax /= prototype->BuyCount;
+                else if (bidMax == 0)
+                    bidMax /= 1 * pItem->GetCount() * config->GetBuyerPrice(prototype->Quality);
+                if (currentprice >= bidMax)
+                    bidMax = 0;
+            }
             break;
         default:
             break;
@@ -858,16 +977,16 @@ void AuctionHouseBot::Initialize()
                 break;
             }
 
-            if (SellMethod)
-            {
-                if (itr->second.BuyPrice == 0)
-                    continue;
-            }
-            else
-            {
-                if (itr->second.SellPrice == 0)
-                    continue;
-            }
+//            if (SellMethod)
+//            {
+//                if (itr->second.BuyPrice == 0)
+//                    continue;
+//            }
+//            else
+//            {
+//                if (itr->second.SellPrice == 0)
+//                    continue;
+//            }
 
             if (itr->second.Quality > 6)
                 continue;
@@ -900,7 +1019,7 @@ void AuctionHouseBot::Initialize()
                     continue;
             }
 
-            if ((Loot_Items == 0) && !(itr->second.Class == ITEM_CLASS_TRADE_GOODS))
+            if ((Loot_Items == 0) && itr->second.Class != ITEM_CLASS_TRADE_GOODS)
             {
                 bool isLootItem = false;
 
@@ -928,7 +1047,7 @@ void AuctionHouseBot::Initialize()
                     continue;
             }
 
-            if ((Other_Items == 0) && !(itr->second.Class == ITEM_CLASS_TRADE_GOODS))
+            if ((Other_Items == 0) && itr->second.Class != ITEM_CLASS_TRADE_GOODS)
             {
                 bool isVendorItem = false;
                 bool isLootItem = false;
@@ -1557,18 +1676,17 @@ void AuctionHouseBot::Commands(uint32 command, uint32 ahMapID, uint32 col, char*
 
             AuctionHouseObject::AuctionEntryMap::iterator itr;
             itr = auctionHouse->GetAuctionsBegin();
+            auto expire_time = GameTime::GetGameTime().count();
 
             while (itr != auctionHouse->GetAuctionsEnd())
             {
                 if (itr->second->owner.GetCounter() == AHBplayerGUID)
                 {
-                    itr->second->expire_time = GameTime::GetGameTime().count();
-                    uint32 id = itr->second->Id;
-                    uint32 expire_time = itr->second->expire_time;
-                    CharacterDatabase.Execute("UPDATE auctionhouse SET time = '{}' WHERE id = '{}'", expire_time, id);
+                    itr->second->expire_time = expire_time;
                 }
                 ++itr;
             }
+            CharacterDatabase.Execute("UPDATE auctionhouse SET time = '{}' WHERE houseid = '{}'", GameTime::GetGameTime().count(), ahMapID);
         }
         break;
     case 1:     //min items
