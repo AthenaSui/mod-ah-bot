@@ -1,26 +1,19 @@
 /*
- * Copyright (C) 2008-2012 TrinityCore <http://www.trinitycore.org/>
+ * This file is part of the AzerothCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation; either version 2 of the License, or (at your
+ * under the terms of the GNU Affero General Public License as published by the
+ * Free Software Foundation; either version 3 of the License, or (at your
  * option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but WITHOUT
  * ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
- * FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for
+ * FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for
  * more details.
  *
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
-/* ScriptData
-Name: ah_bot_commandscript
-%Complete: 100
-Comment: All ah_bot related commands
-Category: commandscripts
-EndScriptData */
 
 #include "ScriptMgr.h"
 #include "Chat.h"
@@ -53,6 +46,26 @@ public:
         char* opt = strtok((char*)args, " ");
         char* ahMapIdStr = strtok(NULL, " ");
 
+        auto qualityStringToEnum = [](const char* qualityName, int maxCount)
+        {
+            if (strncmp(qualityName, "grey", maxCount) == 0)
+                return ITEM_QUALITY_POOR;
+            else if (strncmp(qualityName, "white", maxCount) == 0)
+                return ITEM_QUALITY_NORMAL;
+            else if (strncmp(qualityName, "green", maxCount) == 0)
+                return ITEM_QUALITY_UNCOMMON;
+            else if (strncmp(qualityName, "blue", maxCount) == 0)
+                return ITEM_QUALITY_RARE;
+            else if (strncmp(qualityName, "purple", maxCount) == 0)
+                return ITEM_QUALITY_EPIC;
+            else if (strncmp(qualityName, "orange", maxCount) == 0)
+                return ITEM_QUALITY_LEGENDARY;
+            else if (strncmp(qualityName, "yellow", maxCount) == 0)
+                return ITEM_QUALITY_ARTIFACT;
+
+            return static_cast<ItemQualities>(-1); // Invalid
+        };
+
         if (ahMapIdStr)
         {
             ahMapID = uint32(strtoul(ahMapIdStr, NULL, 0));
@@ -81,6 +94,7 @@ public:
         {
             handler->PSendSysMessage("AHBot commands:");
             handler->PSendSysMessage("ahexpire");
+            handler->PSendSysMessage("ahexpireclass");
             handler->PSendSysMessage("minitems");
             handler->PSendSysMessage("maxitems");
             //handler->PSendSysMessage("");
@@ -94,6 +108,7 @@ public:
             handler->PSendSysMessage("buyerprice");
             handler->PSendSysMessage("bidinterval");
             handler->PSendSysMessage("bidsperinterval");
+            handler->PSendSysMessage("reload");
             return true;
         }
         else if (strncmp(opt, "ahexpire", l) == 0)
@@ -104,7 +119,18 @@ public:
                 return false;
             }
 
-            auctionbot->Commands(0, ahMapID, 0, NULL);
+            sAHBot->Commands(AHBotCommand::ahexpire, ahMapID, 0, NULL);
+        }
+        else if (strncmp(opt, "ahexpireclass", l) == 0)
+        {
+            char* param1 = strtok(NULL, " ");
+            if (!ahMapIdStr)
+            {
+                handler->PSendSysMessage("Syntax is: ahbotoptions ahexpireclass $ahMapID (2, 6 or 7) $class");
+                return false;
+            }
+
+            sAHBot->Commands(AHBotCommand::ahexpireclass, ahMapID, 0, param1);
         }
         else if (strncmp(opt, "minitems", l) == 0)
         {
@@ -115,7 +141,7 @@ public:
                 return false;
             }
 
-            auctionbot->Commands(1, ahMapID, 0, param1);
+            sAHBot->Commands(AHBotCommand::minitems, ahMapID, 0, param1);
         }
         else if (strncmp(opt, "maxitems", l) == 0)
         {
@@ -126,37 +152,7 @@ public:
                 return false;
             }
 
-            auctionbot->Commands(2, ahMapID, 0, param1);
-        }
-        else if (strncmp(opt, "mintime", l) == 0)
-        {
-            handler->PSendSysMessage("ahbotoptions mintime has been deprecated");
-            return false;
-            /*
-            char* param1 = strtok(NULL, " ");
-            if (!ahMapIdStr || !param1)
-            {
-                PSendSysMessage("Syntax is: ahbotoptions mintime $ahMapID (2, 6 or 7) $mintime");
-                return false;
-            }
-
-            auctionbot.Commands(3, ahMapID, 0, param1);
-            */
-        }
-        else if (strncmp(opt, "maxtime", l) == 0)
-        {
-            handler->PSendSysMessage("ahbotoptions maxtime has been deprecated");
-            return false;
-            /*
-            char* param1 = strtok(NULL, " ");
-            if (!ahMapIdStr || !param1)
-            {
-                PSendSysMessage("Syntax is: ahbotoptions maxtime $ahMapID (2, 6 or 7) $maxtime");
-                return false;
-            }
-
-            auctionbot.Commands(4, ahMapID, 0, param1);
-            */
+            sAHBot->Commands(AHBotCommand::maxitems, ahMapID, 0, param1);
         }
         else if (strncmp(opt, "percentages", l) == 0)
         {
@@ -240,7 +236,7 @@ public:
             strcat(param, param13);
             strcat(param, " ");
             strcat(param, param14);
-            auctionbot->Commands(5, ahMapID, 0, param);
+            sAHBot->Commands(AHBotCommand::percentages, ahMapID, 0, param);
         }
         else if (strncmp(opt, "minprice", l) == 0)
         {
@@ -253,20 +249,9 @@ public:
                 return false;
             }
 
-            if (strncmp(param1, "grey", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_GREY, param2);
-            else if (strncmp(param1, "white", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_WHITE, param2);
-            else if (strncmp(param1, "green", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_GREEN, param2);
-            else if (strncmp(param1, "blue", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_BLUE, param2);
-            else if (strncmp(param1, "purple", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_PURPLE, param2);
-            else if (strncmp(param1, "orange", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_ORANGE, param2);
-            else if (strncmp(param1, "yellow", l) == 0)
-                auctionbot->Commands(6, ahMapID, AHB_YELLOW, param2);
+            auto quality = qualityStringToEnum(param1, l);
+            if (quality != static_cast<ItemQualities>(-1))
+                sAHBot->Commands(AHBotCommand::minprice, ahMapID, quality, param2);
             else
             {
                 handler->PSendSysMessage("Syntax is: ahbotoptions minprice $ahMapID (2, 6 or 7) $color (grey, white, green, blue, purple, orange or yellow) $price");
@@ -282,20 +267,10 @@ public:
                 handler->PSendSysMessage("Syntax is: ahbotoptions maxprice $ahMapID (2, 6 or 7) $color (grey, white, green, blue, purple, orange or yellow) $price");
                 return false;
             }
-            if (strncmp(param1, "grey", l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_GREY, param2);
-            else if (strncmp(param1, "white", l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_WHITE, param2);
-            else if (strncmp(param1, "green", l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_GREEN, param2);
-            else if (strncmp(param1, "blue", l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_BLUE, param2);
-            else if (strncmp(param1, "purple", l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_PURPLE, param2);
-            else if (strncmp(param1, "orange",l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_ORANGE, param2);
-            else if (strncmp(param1, "yellow", l) == 0)
-                auctionbot->Commands(7, ahMapID, AHB_YELLOW, param2);
+
+            auto quality = qualityStringToEnum(param1, l);
+            if (quality != static_cast<ItemQualities>(-1))
+                sAHBot->Commands(AHBotCommand::maxprice, ahMapID, quality, param2);
             else
             {
                 handler->PSendSysMessage("Syntax is: ahbotoptions maxprice $ahMapID (2, 6 or 7) $color (grey, white, green, blue, purple, orange or yellow) $price");
@@ -320,20 +295,9 @@ public:
                 return false;
             }
 
-            if (strncmp(param1, "grey", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_GREY, param2);
-            else if (strncmp(param1, "white", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_WHITE, param2);
-            else if (strncmp(param1, "green", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_GREEN, param2);
-            else if (strncmp(param1, "blue", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_BLUE, param2);
-            else if (strncmp(param1, "purple", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_PURPLE, param2);
-            else if (strncmp(param1, "orange", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_ORANGE, param2);
-            else if (strncmp(param1, "yellow", l) == 0)
-                auctionbot->Commands(8, ahMapID, AHB_YELLOW, param2);
+            auto quality = qualityStringToEnum(param1, l);
+            if (quality != static_cast<ItemQualities>(-1))
+                sAHBot->Commands(AHBotCommand::minbidprice, ahMapID, quality, param2);
             else
             {
                 handler->PSendSysMessage("Syntax is: ahbotoptions minbidprice $ahMapID (2, 6 or 7) $color (grey, white, green, blue, purple, orange or yellow) $price");
@@ -358,20 +322,9 @@ public:
                 return false;
             }
 
-            if (strncmp(param1, "grey", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_GREY, param2);
-            else if (strncmp(param1, "white", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_WHITE, param2);
-            else if (strncmp(param1, "green", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_GREEN, param2);
-            else if (strncmp(param1, "blue", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_BLUE, param2);
-            else if (strncmp(param1, "purple", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_PURPLE, param2);
-            else if (strncmp(param1, " orange", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_ORANGE, param2);
-            else if (strncmp(param1, "yellow", l) == 0)
-                auctionbot->Commands(9, ahMapID, AHB_YELLOW, param2);
+            auto quality = qualityStringToEnum(param1, l);
+            if (quality != static_cast<ItemQualities>(-1))
+                sAHBot->Commands(AHBotCommand::maxbidprice, ahMapID, quality, param2);
             else
             {
                 handler->PSendSysMessage("Syntax is: ahbotoptions max bidprice $ahMapID (2, 6 or 7) $color (grey, white, green, blue, purple, orange or yellow) $price");
@@ -396,20 +349,9 @@ public:
             //    return false;
             // }
 
-            if (strncmp(param1, "grey",l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_GREY, param2);
-            else if (strncmp(param1, "white", l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_WHITE, param2);
-            else if (strncmp(param1, "green", l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_GREEN, param2);
-            else if (strncmp(param1, "blue", l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_BLUE, param2);
-            else if (strncmp(param1, "purple", l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_PURPLE, param2);
-            else if (strncmp(param1, "orange", l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_ORANGE, param2);
-            else if (strncmp(param1, "yellow", l) == 0)
-                auctionbot->Commands(10, ahMapID, AHB_YELLOW, param2);
+            auto quality = qualityStringToEnum(param1, l);
+            if (quality != static_cast<ItemQualities>(-1))
+                sAHBot->Commands(AHBotCommand::maxstack, ahMapID, quality, param2);
             else
             {
                 handler->PSendSysMessage("Syntax is: ahbotoptions maxstack $ahMapID (2, 6 or 7) $color (grey, white, green, blue, purple, orange or yellow) $value");
@@ -427,20 +369,9 @@ public:
                 return false;
             }
 
-            if (strncmp(param1, "grey", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_GREY, param2);
-            else if (strncmp(param1, "white", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_WHITE, param2);
-            else if (strncmp(param1, "green", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_GREEN, param2);
-            else if (strncmp(param1, "blue", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_BLUE, param2);
-            else if (strncmp(param1, "purple", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_PURPLE, param2);
-            else if (strncmp(param1, "orange", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_ORANGE, param2);
-            else if (strncmp(param1, "yellow", l) == 0)
-                auctionbot->Commands(11, ahMapID, AHB_YELLOW, param2);
+            auto quality = qualityStringToEnum(param1, l);
+            if (quality != static_cast<ItemQualities>(-1))
+                sAHBot->Commands(AHBotCommand::buyerprice, ahMapID, quality, param2);
             else
             {
                 handler->PSendSysMessage("Syntax is: ahbotoptions buyerprice $ahMapID (2, 6 or 7) $color (grey, white, green, blue or purple) $price");
@@ -457,7 +388,7 @@ public:
                 return false;
             }
 
-            auctionbot->Commands(12, ahMapID, 0, param1);
+            sAHBot->Commands(AHBotCommand::bidinterval, ahMapID, 0, param1);
         }
         else if (strncmp(opt, "bidsperinterval", l) == 0)
         {
@@ -469,7 +400,13 @@ public:
                 return false;
             }
 
-            auctionbot->Commands(13, ahMapID, 0, param1);
+            sAHBot->Commands(AHBotCommand::bidsperinterval, ahMapID, 0, param1);
+        }
+        else if (strncmp(opt, "reload", l) == 0)
+        {
+            LOG_INFO("server.loading", "Reloading AuctionHouseBot...");
+            sAHBot->InitializeConfiguration();
+            sAHBot->Initialize();
         }
         else
         {
